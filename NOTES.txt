@@ -1,0 +1,56 @@
+---
+
+### 3. NOTES.txt
+This document explains the "Why" behind the technical decisions made during the test refactor.
+
+```text
+TEST STRATEGY & RATIONALE: KRAKEN V2 MIGRATION
+
+1. VALIDATION FOCUS & RISK MITIGATION
+   - Schema Consistency: V2 introduces named objects. We validate that keys like 
+     'bid' and 'ask' exist and aren't subject to "key-flipping" regressions.
+   - Liveness (SLA): Kraken promises a 10s heartbeat. We test a 30s window to 
+     verify the gateway doesn't suppress pulses during inactivity.
+   - Handshake Stability: Validating that the V2 upgrade doesn't return 503s, 
+     which indicates gateway resource exhaustion.
+
+2. KEY ASSUMPTIONS
+   - Market Activity: Tests assume a minimum level of volatility for BTC/USD 
+     to trigger ticker updates.
+   - Network Environment: Tests assume an environment that allows long-lived 
+     WSS connections without transparent proxy interference.
+
+3. DESIGN TRADE-OFFS
+   - Predicate-Based Waiting: We chose custom predicates (m.type === 'snapshot') 
+     instead of fixed delays (sleep). This is faster but more complex to maintain.
+   - Timeout Buffer: Timeouts were increased to 30s. Trade-off: Slower 
+     detection of "real" failures in exchange for zero "flaky" false positives.
+   - Singleton Client: The test uses a shared WebSocket per worker to 
+     minimize handshake overhead, reflecting a real trading bot's behavior.
+
+4. LANGUAGE RATIONALE: WHY TYPESCRIPT OVER PYTHON?
+   
+   The decision to use TypeScript (Node.js) instead of Python was driven by three 
+   critical factors specific to WebSocket and Financial API testing:
+
+   A. NATIVE ASYNC ARCHITECTURE
+      WebSocket testing is inherently asynchronous (listening for heartbeats while 
+      sending subscriptions). TypeScript/Node.js uses a non-blocking event loop by 
+      default. While Python supports async via 'asyncio', the Playwright 
+      implementation in TypeScript is more mature, offering a more stable 
+      'test runner' that handles concurrent WebSocket streams with less 
+      boilerplate and lower memory overhead.
+
+   B. TYPE SAFETY FOR FINANCIAL SCHEMAS
+      Kraken V2 uses complex, nested JSON objects. TypeScript's 'Interfaces' allow 
+      us to define the exact shape of a Ticker or Book update. If the API 
+      removes a field like 'bid', the compiler catches the error before the test 
+      even runs. Python's dynamic typing requires more runtime 'isinstance' 
+      checks to achieve the same level of confidence.
+
+   C. TOOLING PARITY & CI INTEGRATION
+      The Playwright Test Runner (@playwright/test) is a first-class citizen in 
+      the Node.js ecosystem. It includes built-in HTML reporting, UI mode, and 
+      trace viewing that are often one step ahead of the Python port. For a 
+      high-stakes V2 migration, having the most robust debugging tools was 
+      prioritized over Python's scripting ease.     
