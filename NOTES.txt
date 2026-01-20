@@ -1,62 +1,54 @@
----
-
-### 3. NOTES.txt
-This document explains the "Why" behind the technical decisions made during the test refactor.
-
-```text
 TEST STRATEGY & RATIONALE: KRAKEN V2 MIGRATION
 
 1. VALIDATION FOCUS & RISK MITIGATION
-   - Schema Consistency: V2 introduces named objects. We validate that keys like 
-     'bid' and 'ask' exist and aren't subject to "key-flipping" regressions.
-   - Liveness (SLA): Kraken promises a 10s heartbeat. We test a 30s window to 
-     verify the gateway doesn't suppress pulses during inactivity.
-   - Handshake Stability: Validating that the V2 upgrade doesn't return 503s, 
-     which indicates gateway resource exhaustion.
+   - Schema Stability: Kraken V2 responses use structured objects. Tests validate
+     critical fields (e.g., bid, ask, symbol, timestamp) to detect breaking changes.
+   - Connection Liveness: Heartbeats and status messages are validated to ensure
+     the gateway maintains idle connections and does not silently drop sessions.
+   - Subscription Integrity: Tests verify that subscriptions, unsubscriptions,
+     and acknowledgments behave deterministically and do not leak data streams.
 
 2. KEY ASSUMPTIONS
-   - Market Activity: Tests assume a minimum level of volatility for BTC/USD 
-     to trigger ticker updates.
-   - Network Environment: Tests assume an environment that allows long-lived 
-     WSS connections without transparent proxy interference.
+   - Market Activity: Tests assume sufficient liquidity for BTC/USD and ETH/USD
+     to generate ticker, trade, and book updates within test timeouts.
+   - Network Environment: Tests assume stable WSS connectivity without aggressive
+     proxies, firewalls, or connection timeouts interfering with WebSocket streams.
+   - API Contract Stability: Core channel formats and acknowledgment structures
+     are assumed to remain backward-compatible within the V2 release window.
 
 3. DESIGN TRADE-OFFS
-   - Predicate-Based Waiting: We chose custom predicates (m.type === 'snapshot') 
-     instead of fixed delays (sleep). This is faster but more complex to maintain.
-   - Timeout Buffer: Timeouts were increased to 30s. Trade-off: Slower 
-     detection of "real" failures in exchange for zero "flaky" false positives.
-   - Singleton Client: The test uses a shared WebSocket per worker to 
-     minimize handshake overhead, reflecting a real trading bot's behavior.
+   - Predicate-Based Waiting: Custom condition-based waits (e.g., m.channel === 'ticker')
+     were chosen over fixed sleeps to reduce flakiness and improve execution speed.
+   - Timeout Tuning: Timeouts were calibrated per channel (3s–20s) to balance
+     reliability against test suite runtime and false positives.
+   - Isolated Connections: Each test uses a fresh WebSocket connection to ensure
+     isolation, prevent cross-test contamination, and simplify debugging.
+   - Silence Validation: Explicit "no-message" windows are used to validate unsubscribe
+     and idle-connection behavior rather than assuming silence by default.
 
-4. LANGUAGE RATIONALE: WHY TYPESCRIPT OVER PYTHON?
-   
-   The decision to use TypeScript (Node.js) instead of Python was driven by three 
-   critical factors specific to WebSocket and Financial API testing:
+4. LANGUAGE & TOOLING RATIONALE: TYPESCRIPT + PLAYWRIGHT
 
-   A. NATIVE ASYNC ARCHITECTURE
-      WebSocket testing is inherently asynchronous (listening for heartbeats while 
-      sending subscriptions). TypeScript/Node.js uses a non-blocking event loop by 
-      default. While Python supports async via 'asyncio', the Playwright 
-      implementation in TypeScript is more mature, offering a more stable 
-      'test runner' that handles concurrent WebSocket streams with less 
-      boilerplate and lower memory overhead.
+   TypeScript with Playwright was selected over Python due to:
 
-   B. TYPE SAFETY FOR FINANCIAL SCHEMAS
-      Kraken V2 uses complex, nested JSON objects. TypeScript's 'Interfaces' allow 
-      us to define the exact shape of a Ticker or Book update. If the API 
-      removes a field like 'bid', the compiler catches the error before the test 
-      even runs. Python's dynamic typing requires more runtime 'isinstance' 
-      checks to achieve the same level of confidence.
+   A. EVENT-DRIVEN CONCURRENCY
+      WebSocket testing requires listening and sending concurrently. Node.js’s
+      event loop model aligns naturally with this pattern and reduces async
+      complexity compared to Python’s asyncio orchestration.
 
-   C. TOOLING PARITY & CI INTEGRATION
-      The Playwright Test Runner (@playwright/test) is a first-class citizen in 
-      the Node.js ecosystem. It includes built-in HTML reporting, UI mode, and 
-      trace viewing that are often one step ahead of the Python port. For a 
-      high-stakes V2 migration, having the most robust debugging tools was 
-      prioritized over Python's scripting ease.     
-      
-5. VERSION CONTROL HISTORY
-   - Initialization: Git was used to track the evolution of the test suite.
-   - Branching Strategy: Main branch holds stable regression tests.
-   - Commit Logic: Atomic commits were used to separate feature additions 
-     (e.g., new test cases) from configuration changes (e.g., Docker/Config).
+   B. TYPE SAFETY FOR FINANCIAL DATA
+      Kraken V2 emits deeply nested financial objects. TypeScript’s static typing
+      allows compile-time detection of schema changes (e.g., missing bid/ask),
+      preventing silent runtime failures common in dynamically typed languages.
+
+   C. TEST RUNNER MATURITY & CI SUPPORT
+      Playwright’s TypeScript runner offers robust retries, tracing, HTML reports,
+      and parallel execution, making it well-suited for regression-grade financial
+      API testing and CI pipelines.
+
+5. VERSION CONTROL & MAINTENANCE PRACTICES
+   - Repository Structure: Test helpers, constants, and specs are modularized to
+     support future channel additions with minimal duplication.
+   - Branching Strategy: Main branch contains stable regression tests; feature
+     branches isolate new channel or scenario coverage.
+   - Commit Discipline: Atomic commits separate logic changes from configuration
+     updates, enabling clean rollbacks and traceability.

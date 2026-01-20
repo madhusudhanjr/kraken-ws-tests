@@ -1,51 +1,95 @@
 import WebSocket from 'ws';
 
-// Using a named export
-export class KrakenClient {
-  private ws: WebSocket;
+type Message = any;
+type Condition = (msg: Message) => boolean;
 
-  constructor(url: string) {
-    this.ws = new WebSocket(url);
-  }
+export default class KrakenClient {
+  private ws!: WebSocket;
+  private messageHandlers: Set<(msg: Message) => void> = new Set();
 
-  async connect(): Promise<void> {
+  constructor(private url: string) {}
+
+  async connect(timeout = 5000): Promise<void> {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Connection Timeout')), 5000);
+      this.ws = new WebSocket(this.url);
+
+      const timer = setTimeout(() => {
+        this.ws.terminate();
+        reject(new Error('Connection Timeout'));
+      }, timeout);
+
       this.ws.on('open', () => {
-        clearTimeout(timeout);
+        clearTimeout(timer);
         resolve();
       });
-      this.ws.on('error', (err) => reject(err));
+
+      this.ws.on('message', (data: Buffer) => {
+        const msg = JSON.parse(data.toString());
+        this.messageHandlers.forEach(handler => handler(msg));
+      });
+
+      this.ws.on('error', err => reject(err));
     });
   }
 
-  send(payload: object) {
+  send(payload: object): void {
     this.ws.send(JSON.stringify(payload));
   }
 
-  async waitFor(predicate: (msg: any) => boolean, timeout = 20000): Promise<any> {
+  async waitFor(condition: Condition, count = 1, timeout = 8000): Promise<Message[]> {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`Wait Timeout: Message not received within ${timeout}ms`));
-      }, timeout);
+      const results: Message[] = [];
 
-      const listener = (data: Buffer) => {
-        const msg = JSON.parse(data.toString());
-        
-        // To debug what Kraken is sending if the test hangs
-        // console.log('DEBUG MSG:', JSON.stringify(msg));
-
-        if (predicate(msg)) {
-          clearTimeout(timer);
-          this.ws.off('message', listener);
-          resolve(msg);
+      const handler = (msg: Message) => {
+        if (condition(msg)) {
+          results.push(msg);
+          if (results.length === count) {
+            cleanup();
+            resolve(results);
+          }
         }
       };
-      this.ws.on('message', listener);
+
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`Timeout: Only received ${results.length}/${count} messages`));
+      }, timeout);
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.messageHandlers.delete(handler);
+      };
+
+      this.messageHandlers.add(handler);
     });
   }
 
-  close() {
-    if (this.ws) this.ws.terminate();
+  async waitForSilence(condition: Condition, timeout = 5000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const handler = (msg: Message) => {
+        if (condition(msg)) {
+          cleanup();
+          reject(new Error('Message received during silence window'));
+        }
+      };
+
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, timeout);
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.messageHandlers.delete(handler);
+      };
+
+      this.messageHandlers.add(handler);
+    });
+  }
+
+  close(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.close();
+    }
   }
 }

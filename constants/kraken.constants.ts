@@ -12,7 +12,9 @@ export const KRAKEN_V2 = {
   // Test pairs chosen for high liquidity (ensures frequent data updates)
   SYMBOLS: {
     BTC_USD: 'BTC/USD',
+    BTC_GBP: 'BTC/GBP',
     ETH_USD: 'ETH/USD',
+    SOL_USD: 'SOL/USD',
     LOWERCASE_BTC: 'btc/usd' // Used specifically for normalization testing
   },
 
