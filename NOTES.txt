@@ -54,3 +54,9 @@ TEST STRATEGY & RATIONALE: KRAKEN V2 MIGRATION
       trace viewing that are often one step ahead of the Python port. For a 
       high-stakes V2 migration, having the most robust debugging tools was 
       prioritized over Python's scripting ease.     
+      
+5. VERSION CONTROL HISTORY
+   - Initialization: Git was used to track the evolution of the test suite.
+   - Branching Strategy: Main branch holds stable regression tests.
+   - Commit Logic: Atomic commits were used to separate feature additions 
+     (e.g., new test cases) from configuration changes (e.g., Docker/Config).

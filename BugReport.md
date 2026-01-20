@@ -11,13 +11,13 @@ The migration to V2 has introduced several high-severity issues, most notably **
 
 ## 2. Bug Table
 
-| Bug ID | Severity | Category | Observed Behavior (V2 Regression) | SLA / V1 Reference Behavior |
-| :--- | :--- | :--- | :--- | :--- |
-| **KRA-V2-01** | **High** | **Liveness** | Heartbeats fail to arrive within 30s. Connection goes silent in idle state. | **V1:** 1 heartbeat/sec guaranteed in absence of data. |
-| **KRA-V2-02** | **Critical** | **Availability** | Random **503 Service Unavailable** errors during the WebSocket upgrade (handshake). | **V1:** High availability; 503s are extremely rare during connection. |
-| **KRA-V2-03** | **High** | **Schema** | `book` snapshot is inconsistent. `bid`/`ask` vs `bids`/`asks` keys and occasional empty `data` objects. | **V1:** Fixed positional arrays (`as`/`bs` keys) for snapshots. |
-| **KRA-V2-04** | **Medium** | **Data Integrity** | Timestamp strings return `NaN` in standard Node.js/JS Date parsers. | **V1:** Standardized UNIX timestamps (seconds.microseconds). |
-| **KRA-V2-05** | **Low** | **Consistency** | Error strings changed case (e.g., `Already subscribed`). | **V1:** Lowercase convention for error strings. |
+| Bug ID | Severity | Category | Observed Behavior (V2 Regression) |
+| :--- | :--- | :--- | :--- |
+| **KRA-V2-01** | **High** | **Liveness** | Heartbeats fail to arrive within 30s. Connection goes silent in idle state. |
+| **KRA-V2-02** | **Critical** | **Availability** | Random **503 Service Unavailable** errors during the WebSocket upgrade (handshake). |
+| **KRA-V2-03** | **High** | **Schema** | `book` snapshot is inconsistent. `bid`/`ask` vs `bids`/`asks` keys and occasional empty `data` objects. |
+| **KRA-V2-04** | **Medium** | **Data Integrity** | Timestamp strings return `NaN` in standard Node.js/JS Date parsers. |
+| **KRA-V2-05** | **Low** | **Consistency** | Error strings changed case (e.g., `Already subscribed`). | 
 
 ---
 
